@@ -1,0 +1,13 @@
+[package]
+name = "motion-detector-rs"
+version = "0.1.0"
+authors = ["Daniele Galli <daniele.galli@eidosmedia.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+image = "0.23.12"
+imageproc = "0.22.0"
+anyhow = "1.0.38"
+rayon = "1.5.0"
