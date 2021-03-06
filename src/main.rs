@@ -6,10 +6,12 @@ use std::{
     time::Instant,
 };
 
-// use rayon::prelude::*;
-
 use anyhow::{Context, Result};
-use image::{DynamicImage, GrayImage, ImageBuffer};
+use image::{DynamicImage, GrayImage};
+// use ops::{difference, merge, move_towards};
+use ops::parralel::{difference, merge, move_towards};
+
+mod ops;
 
 enum MotionDetectionStep {
     MotionDetectionFrame {
@@ -17,176 +19,6 @@ enum MotionDetectionStep {
         motion_level: f32,
     },
     MotionNotDetected,
-}
-
-fn merge(image: &GrayImage, overlay: &GrayImage) -> GrayImage {
-    let now = Instant::now();
-    let (width, height) = image.dimensions();
-
-    // let mut result = ImageBuffer::new(width, height);
-
-    // result
-    //     .enumerate_rows_mut()
-    //     /* .par_bridge() */
-    //     .for_each(|(_y, pixels)| {
-    //         pixels.for_each(|(x, y, pixel): (u32, u32, &mut image::Luma<u8>)| {
-    //             let src = image.get_pixel(x, y)[0];
-    //             let ovr = overlay.get_pixel(x, y)[0];
-
-    //             if src > ovr {
-    //                 pixel[0] = src
-    //             } else {
-    //                 pixel[0] = ovr
-    //             }
-    //         })
-    //     });
-
-    let result = ImageBuffer::from_fn(width, height, |x, y| {
-        let src = image.get_pixel(x, y)[0];
-        let ovr = overlay.get_pixel(x, y)[0];
-
-        if src > ovr {
-            image::Luma([src])
-        } else {
-            image::Luma([ovr])
-        }
-    });
-    println!("merge took {} ms", now.elapsed().as_millis());
-    result
-}
-
-fn move_towards(img1: &GrayImage, img2: &GrayImage, step_size: u8) -> GrayImage {
-    let now = Instant::now();
-    let (width, height) = img1.dimensions();
-
-    // let mut result = ImageBuffer::new(width, height);
-
-    // result
-    //     .enumerate_rows_mut()
-    //     /* .par_bridge() */
-    //     .for_each(|(_y, pixels)| {
-    //         pixels.for_each(|(x, y, pixel): (u32, u32, &mut image::Luma<u8>)| {
-    //             // res = src + Min( Abs( ovr - src ), step ) * Sign( ovr - src )
-    //             let src = img1.get_pixel(x, y)[0];
-    //             let ovr = img2.get_pixel(x, y)[0];
-
-    //             let sign = if ovr > src { 1 } else { -1 };
-
-    //             let abs_difference = if sign > 0 { ovr - src } else { src - ovr };
-    //             let abs_difference = if step_size < abs_difference {
-    //                 step_size
-    //             } else {
-    //                 abs_difference
-    //             };
-
-    //             let p = if sign > 0 {
-    //                 src.saturating_add(abs_difference)
-    //             } else {
-    //                 src.saturating_sub(abs_difference)
-    //             };
-
-    //             pixel[0] = p;
-    //         })
-    //     });
-
-    let result = ImageBuffer::from_fn(width, height, |x, y| {
-        // res = src + Min( Abs( ovr - src ), step ) * Sign( ovr - src )
-        let src = img1.get_pixel(x, y)[0];
-        let ovr = img2.get_pixel(x, y)[0];
-
-        let sign = if ovr > src { 1 } else { -1 };
-
-        let abs_difference = if sign > 0 { ovr - src } else { src - ovr };
-        let abs_difference = if step_size < abs_difference {
-            step_size
-        } else {
-            abs_difference
-        };
-
-        let p = if sign > 0 {
-            src.saturating_add(abs_difference)
-        } else {
-            src.saturating_sub(abs_difference)
-        };
-
-        image::Luma([p])
-    });
-
-    println!("move_towards took {} ms", now.elapsed().as_millis());
-    result
-}
-
-// TODO mutate in place?
-// TODO why u8? do the math
-fn difference(img1: &GrayImage, img2: &GrayImage, threshold: u8) -> GrayImage {
-    let now = Instant::now();
-
-    let (width, height) = img1.dimensions();
-
-    // let mut result = ImageBuffer::new(width, height);
-
-    // result
-    //     .enumerate_rows_mut()
-    //     /* .par_bridge() */
-    //     .for_each(|(_y, pixels)| {
-    //         pixels.for_each(|(x, y, pixel): (u32, u32, &mut image::Luma<u8>)| {
-    //             let first = img1.get_pixel(x, y)[0];
-    //             let second = img2.get_pixel(x, y)[0];
-
-    //             let difference = if first >= second {
-    //                 first - second
-    //             } else {
-    //                 second - first
-    //             };
-
-    //             if difference > threshold {
-    //                 pixel[0] = 255;
-    //             } else {
-    //                 pixel[0] = 0;
-    //             }
-    //         })
-    //     });
-
-    // result.enumerate_pixels_mut()./* par_bridge(). */for_each(
-    //     |(x, y, pixel): (u32, u32, &mut image::Luma<u8>)| {
-    //         let first = img1.get_pixel(x, y)[0];
-    //         let second = img2.get_pixel(x, y)[0];
-
-    //         let difference = if first >= second {
-    //             first - second
-    //         } else {
-    //             second - first
-    //         };
-
-    //         if difference > threshold {
-    //             pixel[0] = 255;
-    //         } else {
-    //             pixel[0] = 0;
-    //         }
-    //     },
-    // );
-
-    let result = ImageBuffer::from_fn(width, height, |x, y| {
-        // TODO spiegarlo....
-        let first = img1.get_pixel(x, y)[0];
-        let second = img2.get_pixel(x, y)[0];
-
-        let difference = if first >= second {
-            first - second
-        } else {
-            second - first
-        };
-
-        if difference > threshold {
-            image::Luma([255])
-        } else {
-            image::Luma([0])
-        }
-    });
-
-    println!("difference took {} micros", now.elapsed().as_micros());
-
-    result
 }
 
 #[derive(Debug, Default)]
@@ -246,7 +78,9 @@ fn main() -> Result<()> {
     //     .build_global()
     //     .unwrap();
 
-    let mut entries = read_dir("data/Candela_m1.10")?
+    let main_start_instant = Instant::now();
+
+    let mut entries = read_dir("data/frames_0")?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, Error>>()?;
 
@@ -258,8 +92,15 @@ fn main() -> Result<()> {
     let _r = create_dir("out");
 
     for (index, frame_path) in entries.iter().enumerate() {
+        let start_frame_instant = Instant::now();
         dbg!(frame_path);
+
+        let open_image_instant = Instant::now();
         let img = image::io::Reader::open(frame_path)?.decode()?;
+        println!(
+            "image read in {} ms",
+            open_image_instant.elapsed().as_millis()
+        );
 
         let now = Instant::now();
         let step = motion_detector.process_frame(&img);
@@ -291,10 +132,22 @@ fn main() -> Result<()> {
             }
         }
 
+        let write_image_instant = Instant::now();
         current_frame
             .save(format!("./out/{:05}.png", index))
             .context("Unable to save image")?;
+        println!(
+            "image written in {}",
+            write_image_instant.elapsed().as_millis()
+        );
+
+        println!(
+            "frame created in {}",
+            start_frame_instant.elapsed().as_millis()
+        );
     }
+
+    println!("main took {} ms", main_start_instant.elapsed().as_millis());
 
     Ok(())
 }
