@@ -1,13 +1,14 @@
 // See https://www.codeproject.com/Articles/10248/Motion-Detection-Algorithms
 
-use std::io::Error;
+use std::{env, fs::write, io::Error};
 use std::{
     fs::{create_dir, read_dir},
     time::Instant,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use image::{DynamicImage, GrayImage};
+use rayon::prelude::*;
 // use ops::{difference, merge, move_towards};
 use ops::parralel::{difference, merge, move_towards};
 
@@ -33,7 +34,13 @@ impl MotionDetector {
     }
 
     fn process_frame(&mut self, frame: &DynamicImage) -> MotionDetectionStep {
-        let current_frame = frame.grayscale().into_luma8();
+        let convert_greyscale_instant = Instant::now();
+        // let current_frame = frame.grayscale().into_luma8();
+        let current_frame = ops::parralel::dyn_grayscale(frame);
+        println!(
+            "converting image grayscale took {} ms",
+            convert_greyscale_instant.elapsed().as_millis()
+        );
 
         if self.background.is_none() {
             self.background = Some(current_frame);
@@ -59,10 +66,16 @@ impl MotionDetector {
 
         let (width, height) = motion_frame.dimensions();
 
+        let count_pixel_instant = Instant::now();
         let mut white_pixels: i32 = 0;
         for pixel in motion_frame.pixels() {
             white_pixels += (pixel[0] >> 7) as i32;
         }
+        println!(
+            "counting motion pixels took {} ms",
+            count_pixel_instant.elapsed().as_millis()
+        );
+
         let motion_level = white_pixels as f32 / (height as f32 * width as f32);
 
         MotionDetectionStep::MotionDetectionFrame {
@@ -80,7 +93,9 @@ fn main() -> Result<()> {
 
     let main_start_instant = Instant::now();
 
-    let mut entries = read_dir("data/frames_0")?
+    let dir = env::args().nth(1).unwrap();
+
+    let mut entries = read_dir(dir)?
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, Error>>()?;
 
@@ -88,64 +103,100 @@ fn main() -> Result<()> {
 
     let mut motion_detector = MotionDetector::new();
 
-    // TODO delete if exists
+    let _r = std::fs::remove_dir_all("./out");
     let _r = create_dir("out");
 
-    for (index, frame_path) in entries.iter().enumerate() {
-        let start_frame_instant = Instant::now();
-        dbg!(frame_path);
+    let mut index: usize = 0;
 
-        let open_image_instant = Instant::now();
-        let img = image::io::Reader::open(frame_path)?.decode()?;
-        println!(
-            "image read in {} ms",
-            open_image_instant.elapsed().as_millis()
-        );
+    let mut out = String::new();
 
-        let now = Instant::now();
-        let step = motion_detector.process_frame(&img);
-        println!("Frame processesd in {} ms", now.elapsed().as_millis());
+    entries.chunks(10).for_each(|chunk| {
+        let images_chunk: Vec<DynamicImage> = chunk
+            .par_iter()
+            .map(|frame_path| {
+                let open_image_instant = Instant::now();
+                println!("Start decoding frame {:?}", frame_path);
+                let img = image::io::Reader::open(frame_path)
+                    .unwrap()
+                    .decode()
+                    .unwrap();
+                println!(
+                    "Frame {:?} decoded in {} ms",
+                    frame_path,
+                    open_image_instant.elapsed().as_millis()
+                );
+                img
+            })
+            .collect();
 
-        let mut current_frame = img;
-        if let MotionDetectionStep::MotionDetectionFrame {
-            motion_level,
-            motion_frame,
-        } = step
-        {
-            if motion_level > 0.001 {
-                // let open = imageproc::morphology::open(
-                //     &motion_frame.to_luma8(),
-                //     imageproc::distance_transform::Norm::LInf,
-                //     1,
-                // );
+        let mut processed: Vec<DynamicImage> = Vec::with_capacity(10);
 
-                // let edges = imageproc::edges::canny(&open, 20_f32, 100_f32);
+        for img in images_chunk {
+            let now = Instant::now();
+            let step = motion_detector.process_frame(&img);
+            println!("Frame processesd in {} ms", now.elapsed().as_millis());
 
-                let red_channel: GrayImage = imageproc::map::red_channel(&current_frame.to_rgb8());
-                let merged = merge(&red_channel, &motion_frame.to_luma8());
+            let mut current_frame = img;
+            if let MotionDetectionStep::MotionDetectionFrame {
+                motion_level,
+                motion_frame,
+            } = step
+            {
+                out += format!("{}\n", motion_level).as_str();
+                if motion_level > 0.006 {
+                    // let open = imageproc::morphology::open(
+                    //     &motion_frame.to_luma8(),
+                    //     imageproc::distance_transform::Norm::LInf,
+                    //     1,
+                    // );
 
-                current_frame = DynamicImage::ImageRgb8(imageproc::map::map_colors2(
-                    &current_frame,
-                    &merged,
-                    |i, r| image::Rgb([r[0], i[1], i[2]]),
-                ));
+                    // let edges = imageproc::edges::canny(&open, 20_f32, 100_f32);
+
+                    let red_channel: GrayImage =
+                        imageproc::map::red_channel(&current_frame.to_rgb8());
+                    let merged = merge(&red_channel, &motion_frame.to_luma8());
+
+                    current_frame = DynamicImage::ImageRgb8(imageproc::map::map_colors2(
+                        &current_frame,
+                        &merged,
+                        |i, r| image::Rgb([r[0], i[1], i[2]]),
+                    ));
+
+                    processed.push(current_frame);
+                }
             }
+
+            // processed.push(current_frame);
+
+            // let write_image_instant = Instant::now();
+            // current_frame
+            //     .save(format!("./out/{:05}.png", index))
+            //     .expect("Unable to save image");
+            // println!(
+            //     "image written in {}",
+            //     write_image_instant.elapsed().as_millis()
+            // );
         }
 
-        let write_image_instant = Instant::now();
-        current_frame
-            .save(format!("./out/{:05}.png", index))
-            .context("Unable to save image")?;
-        println!(
-            "image written in {}",
-            write_image_instant.elapsed().as_millis()
-        );
+        processed
+            .par_iter()
+            .enumerate()
+            .for_each(|(i, current_frame)| {
+                let write_image_instant = Instant::now();
+                let name = format!("./out/{:05}.png", index + i);
+                println!("Start writing image {}", name);
+                current_frame.save(&name).expect("Unable to save image");
+                println!(
+                    "image {} written in {}",
+                    name,
+                    write_image_instant.elapsed().as_millis()
+                );
+            });
 
-        println!(
-            "frame created in {}",
-            start_frame_instant.elapsed().as_millis()
-        );
-    }
+        index += processed.len();
+    });
+
+    write("out.csv", out).expect("error writing out csv");
 
     println!("main took {} ms", main_start_instant.elapsed().as_millis());
 

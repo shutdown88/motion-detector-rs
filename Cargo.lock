@@ -285,6 +285,7 @@ dependencies = [
  "anyhow",
  "image",
  "imageproc",
+ "num-traits",
  "rayon",
 ]
 

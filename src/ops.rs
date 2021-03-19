@@ -78,10 +78,157 @@ pub fn difference(img1: &GrayImage, img2: &GrayImage, threshold: u8) -> GrayImag
 }
 
 pub mod parralel {
+    use num_traits::{NumCast, ToPrimitive};
     use std::time::Instant;
 
-    use image::{GrayImage, ImageBuffer};
+    use image::{buffer::EnumeratePixelsMut, DynamicImage, GrayImage, ImageBuffer, Luma, Pixel};
     use rayon::prelude::*;
+
+    pub fn dyn_grayscale(input_image: &DynamicImage) -> GrayImage {
+        let now = Instant::now();
+
+        let result = match *input_image {
+            DynamicImage::ImageLuma8(ref p) => p.clone(),
+            DynamicImage::ImageLumaA8(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = p[0];
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageRgb8(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = p[0];
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageRgba8(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = p[0];
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageBgr8(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = p[0];
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageBgra8(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = p[0];
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageLuma16(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = NumCast::from(p[0].to_u64().unwrap() >> 8).unwrap();
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageLumaA16(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = NumCast::from(p[0].to_u64().unwrap() >> 8).unwrap();
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageRgb16(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = NumCast::from(p[0].to_u64().unwrap() >> 8).unwrap();
+                        });
+                    },
+                );
+
+                out
+            }
+            DynamicImage::ImageRgba16(ref p) => {
+                let (width, height) = p.dimensions();
+                let mut out = ImageBuffer::new(width, height);
+
+                out.enumerate_rows_mut().par_bridge().for_each(
+                    |(_y, row): (u32, EnumeratePixelsMut<Luma<u8>>)| {
+                        row.for_each(|(x, y, pixel)| {
+                            let p = p.get_pixel(x, y).to_luma();
+                            pixel[0] = NumCast::from(p[0].to_u64().unwrap() >> 8).unwrap();
+                        });
+                    },
+                );
+
+                out
+            }
+        };
+        println!("parallel grayscale took {} ms", now.elapsed().as_millis());
+
+        result
+    }
 
     pub fn merge(image: &GrayImage, overlay: &GrayImage) -> GrayImage {
         let now = Instant::now();
